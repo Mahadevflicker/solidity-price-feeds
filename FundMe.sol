@@ -2,17 +2,30 @@
 
 pragma solidity ^0.6.0;
 import "@chainlink/contracts/src/v0.6/interfaces/AggregatorV3Interface.sol";
+import "@chainlink/contracts/src/v0.6/vendor/SafeMathChainlink.sol";
 
 contract FundMe {
+    using SafeMathChainlink for uint256;
 
     mapping(address => uint256) public addressToAmountFunded;
 
-    function fund() public payable {
+    address public owner;
 
-        addressToAmountFunded[msg.sender] += msg.value;
-
+    constructor() public {
+        owner = msg.sender;
     }
 
+    function fund() public payable {
+
+        uint256 minimumUSD = 50 * 10 ** 18;
+
+        require(getConversionRate(msg.value) >= minimumUSD, "You need to spend more ETH!");
+
+        addressToAmountFunded[msg.sender] += msg.value;
+        //ETH -> USD Conversion rate
+    }
+
+    // Kovan rate to convert from eth -> USD address
     function getVersion() public view returns (uint256) {
         AggregatorV3Interface priceFeed = AggregatorV3Interface(0x9326BFA02ADD2366b30bacB125260Af641031331);
         return priceFeed.version();
@@ -21,14 +34,32 @@ contract FundMe {
     function getPrice() public view returns (uint256) {
         AggregatorV3Interface priceFeed = AggregatorV3Interface(0x9326BFA02ADD2366b30bacB125260Af641031331);
 
-        (
-         uint80 roundId,
-         int256 answer,
-         uint256 startedAt,
-         uint256 updatedAt,
-         uint80 answeredInRound)
-         = priceFeed.latestRoundData();
+        (,int256 answer,,,) = priceFeed.latestRoundData();
 
-         return uint256(answer);
+         // Get the price in GWEI
+
+         return uint256(answer * 10000000000);
+    }
+
+    //326434218955
+
+    function getConversionRate(uint256 ethAmount) public view returns (uint256) {
+        uint256 ethPrice = getPrice();
+        uint256 ethAmountinUSD = (ethPrice * ethAmount) / 1000000000000000000;
+        return ethAmountinUSD;
+
+        //34321100000000
+    }
+
+    modifier onlyOwner {
+        require(msg.sender == owner);
+        _;
+    }
+
+    function withdraw() payable onlyOwner public {
+
+
+        msg.sender.transfer(address(this).balance);
+
     }
 }
